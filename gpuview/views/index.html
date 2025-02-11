@@ -139,7 +139,12 @@
                                         <th scope="col">GPU</th>
                                         <th scope="col">Temp.</th>
                                         <th scope="col">Util.</th>
-                                        <th scope="col">Memory Use/Cap</th>
+                                        <th scope="col">
+                                            <div style="justify-content: space-between; display: flex;">
+                                                <div>Memory Use/Cap</div>
+                                                <div>Available</div>     
+                                            </div>   
+                                        </th>
                                         <th scope="col">Power Use/Cap</th>
                                         <th scope="col">User Processes</th>
                                     </tr>
@@ -169,8 +174,10 @@
                                                 :style="{ background: `linear-gradient(to right, ${getColor(gpu.memory)} ${gpu.memory}%, #fff ${gpu.memory}%)` }">
                                                 <div class="progress-bar-container">
                                                     <div class="progress-bar-text">
-                                                        {{ gpu.memory !== undefined ? gpu.memory : '-' }}%
-                                                        ({{ gpu['memory.used'] || 0 }}/{{ gpu['memory.total'] || '-' }})
+                                                        <div style="justify-content: space-between; display: flex;">
+                                                            <div>{{ gpu.memory !== undefined ? gpu.memory : '-' }}% ({{ gpu['memory.used'] || 0 }}/{{ gpu['memory.total'] || '-' }}) </div>
+                                                            <div>{{gpu['memory.total'] - gpu['memory.used']}}</div>     
+                                                        </div> 
                                                     </div>
                                                 </div>
                                             </td>
@@ -267,8 +274,8 @@
                 update_time: '2024-07-04 12:00:00'
             },
             created() {
-                this.fetchData();
-
+                this.fetchData()
+                this.startAutoRefresh()
             },
             methods: {
                 fetchData() {
@@ -276,7 +283,7 @@
                         .then(response => {
                             this.gpustats = response.data.gpustats;
                             this.update_time = response.data.now;
-                            this.startAutoRefresh();
+                            // this.startAutoRefresh();
                         })
                         .catch(error => {
                             console.error("There was an error fetching the GPU stats:", error);
