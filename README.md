@@ -1,46 +1,24 @@
-gpuview-flask
+
+![Screenshot of gpuview](imgs/image.png)
+
+
+gpuview-flask: 
 ---------------------
 
-## Fetures
+gpuview-flask is a lightweight web dashboard for monitoring GPU status across multiple servers. It eliminates the need to SSH into machines to check GPU usage, temperature, memory, and active users. Instead, it provides a real-time, user-friendly interface accessible from a web browser.
 
-### Refactored with Flask
+This version of [gpuview](https://github.com/fgaim/gpuview) has been refactored using Flask, making it more scalable and efficient. It also introduces Vue.js for a responsive frontend, integrates Flask-Caching for optimized performance, and includes an auto-refresh feature to ensure up-to-date GPU information without manual intervention.
 
-This version has been refactored to use Flask, a lightweight and flexible web framework for Python, providing a robust and scalable backend.
+Key Features
+---------------------
 
-### Frontend-Backend Separation with Vue.js
+- **Real-time GPU Monitoring** – View GPU usage, temperature, memory consumption, and active users.
+- **Color-Coded Visualization**
+  - Upper Section: Displays GPU temperature with different colors for intuitive monitoring.
+  - Lower Section: Shows GPU memory usage with distinct colors for quick assessment.
+- **Auto-Refresh** – Continuously updates GPU stats without manual refresh.
+- **Lightweight & Scalable** – Built with Flask and Vue.js for efficiency and responsiveness.
 
-We've implemented a frontend-backend separation using Vue.js for the frontend. Vue.js is a progressive JavaScript framework for building user interfaces, which enhances the user experience with a dynamic and responsive design.
-
-### Caching with Flask-Caching
-
-To improve performance and reduce server load, this version incorporates Flask-Caching. By caching frequently requested data, the number of requests to the server is minimized, leading to faster response times and a more efficient application.
-
-### Auto-refresh Feature for Users
-
-An automatic refresh feature has been added for users, ensuring that they always have the most up-to-date information without needing to manually refresh the page. This feature enhances the usability and convenience of the application.
-
-This combination of technologies and improvements makes the application more modern, responsive, and efficient, providing a better overall experience for users.
-
----
-This version includes modifications based on the original [gpuview](https://github.com/fgaim/gpuview).
-
-
-[![LICENSE](https://img.shields.io/github/license/bei9/gpuview-flask.svg)](https://github.com/bei9/gpuview-flask/blob/master/LICENSE)
-![GitHub issues](https://img.shields.io/github/issues/bei9/gpuview-flask.svg)
-
-GPU is an expensive resource, and deep learning practitioners have to monitor the
-health and usage of their GPUs, such as the temperature, memory, utilization, and the users.
-This can be done with tools like `nvidia-smi` and `gpustat` from the terminal or command-line.
-Often times, however, it is not convenient to `ssh` into servers to just check the GPU status.
-`gpuview` is meant to mitigate this by running a lightweight web dashboard on top of
-.
-
-With `gpuview` one can monitor GPUs on the go, though a web browser. Moreover, **multiple GPU servers**
-can be registered into one `gpuview` dashboard and all stats are aggregated and accessible from one place.
-
-Thumbnail view of GPUs across multiple servers.
-
-![Screenshot of gpuview](imgs/dash-1.png)
 
 Setup
 -----

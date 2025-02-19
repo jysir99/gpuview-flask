@@ -4,24 +4,59 @@
 Web API of gpuview.
 
 @author Fitsum Gaim
-@change Bei9
+@change Jysir
 @url https://github.com/fgaim
 """
 
 import os
 import json
 from datetime import datetime
-
+import sqlite3
+import threading
+import time
+from datetime import datetime
 # from bottle import Bottle, TEMPLATE_PATH, template, response, static_file
 from flask import Flask, jsonify, render_template, send_file
-from flask_caching import Cache
 
 from . import utils
 from . import core
 
 
-app = Flask(__name__, template_folder='views')
-cache = Cache(app, config={'CACHE_TYPE': 'simple'})  # 使用 simple 缓存类型
+app = Flask(__name__)
+
+# === 配置数据库文件路径 ===
+DB_FILE = 'gpustats.db'
+
+# ========== 数据库初始化 ==========
+def init_db():
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS gpustats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT,
+                data TEXT
+            )
+        ''')
+        conn.commit()
+
+# ========== 保存数据到数据库 ==========
+def save_to_db(timestamp, data):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO gpustats (timestamp, data) VALUES (?, ?)', (timestamp,  json.dumps(data, default=str)))
+        conn.commit()
+
+# ========== 从数据库读取最新数据 ==========
+def get_latest_from_db():
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT timestamp, data FROM gpustats ORDER BY id DESC LIMIT 1')
+        row = cursor.fetchone()
+        if row:
+            return {'now': row[0], 'gpustats': json.loads(row[1])}
+        return None
+
 
 EXCLUDE_SELF = False  # Do not report to `/gpustat` calls.
 
@@ -30,12 +65,6 @@ EXCLUDE_SELF = False  # Do not report to `/gpustat` calls.
 @app.route('/index')
 def index():
     return send_file('views/index.html')
-
-@app.route('/test')
-def index_test():
-    gpustats = core.all_gpustats()
-    now = datetime.now().strftime('Updated at %Y-%m-%d %H-%M-%S')
-    return render_template('index.tpl', gpustats=gpustats, update_time=now)
 
 @app.route('/gpustat', methods=['GET'])
 def report_gpustat():
@@ -47,16 +76,39 @@ def report_gpustat():
     return jsonify(response)
 
 
+# ========== 后台线程定期获取 GPU 状态 ==========
+def background_gpustats_fetch():
+    while True:
+        gpustats = core.all_gpustats()
+        now = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+        
+        # 保存到数据库
+        save_to_db(now, gpustats)
+
+        print(f"Data fetched at {now}")
+        time.sleep(2)  # 每 2 秒执行一次
+
+
+# ========== 接口：读取最新数据 ==========
 @app.route('/all_gpustat', methods=['GET'])
-@cache.cached(timeout=2) 
 def report_all_gpustat():
-    gpustats = core.all_gpustats()
-    now = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
-    return jsonify({'gpustats': gpustats, 'now': now})
+    # 从数据库读取最新数据
+    latest_data = get_latest_from_db()
+    
+    if latest_data:
+        return jsonify(latest_data)
+    else:
+        return jsonify({'error': 'No data available'}), 404
 
 
-
+# ========== 程序入口 ==========
 def main():
+    # 初始化数据库
+    init_db()
+
+    # 启动后台线程
+    threading.Thread(target=background_gpustats_fetch, daemon=True).start()
+
     parser = utils.arg_parser()
     args = parser.parse_args()
 
