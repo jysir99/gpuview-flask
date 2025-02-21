@@ -20,7 +20,7 @@ from flask import Flask, jsonify, render_template, send_file
 
 from . import utils
 from . import core
-from core import load_hosts
+
 try:
     from urllib.request import urlopen
 except ImportError:
@@ -108,7 +108,7 @@ def report_all_gpustat():
     mystat = get_latest_from_db()
     if 'gpus' in mystat:
             gpustats.append(mystat)
-    hosts = load_hosts()
+    hosts = core.load_hosts()
     for url in hosts:
         try:
             raw_resp = urlopen(url + '/gpustat')
