@@ -20,12 +20,16 @@ from flask import Flask, jsonify, render_template, send_file
 
 from . import utils
 from . import core
-
-
+from core import load_hosts
+try:
+    from urllib.request import urlopen
+except ImportError:
+    from urllib2 import urlopen
+    
 app = Flask(__name__)
 
 # === 配置数据库文件路径 ===
-DB_FILE = 'gpustats.db'
+DB_FILE = 'mygpustat.db'
 
 # ========== 数据库初始化 ==========
 def init_db():
@@ -34,27 +38,27 @@ def init_db():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS gpustats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp TEXT,
                 data TEXT
             )
         ''')
         conn.commit()
 
 # ========== 保存数据到数据库 ==========
-def save_to_db(timestamp, data):
+def save_to_db(data):
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO gpustats (timestamp, data) VALUES (?, ?)', (timestamp,  json.dumps(data, default=str)))
+        cursor.execute('INSERT INTO gpustats (data) VALUES (?)', (json.dumps(data, default=str),))
         conn.commit()
 
 # ========== 从数据库读取最新数据 ==========
 def get_latest_from_db():
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT timestamp, data FROM gpustats ORDER BY id DESC LIMIT 1')
+        cursor.execute('SELECT data FROM gpustats ORDER BY id DESC LIMIT 1')
         row = cursor.fetchone()
+        # print(row)
         if row:
-            return {'now': row[0], 'gpustats': json.loads(row[1])}
+            return json.loads(row[0])
         return None
 
 
@@ -72,18 +76,23 @@ def report_gpustat():
     Returns the gpustat of this host.
         See `exclude-self` option of `gpuview run`.
     """
-    response = core.my_gpustat()
-    return jsonify(response)
+    
+    latest_data = get_latest_from_db()
+    
+    if latest_data:
+        return jsonify(latest_data)
+    else:
+        return jsonify({})
 
 
 # ========== 后台线程定期获取 GPU 状态 ==========
-def background_gpustats_fetch():
+def background_gpustat_fetch():
     while True:
-        gpustats = core.all_gpustats()
+        gpustat = core.my_gpustat()
         now = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
         
         # 保存到数据库
-        save_to_db(now, gpustats)
+        save_to_db(gpustat)
 
         print(f"Data fetched at {now}")
         time.sleep(2)  # 每 2 秒执行一次
@@ -92,13 +101,38 @@ def background_gpustats_fetch():
 # ========== 接口：读取最新数据 ==========
 @app.route('/all_gpustat', methods=['GET'])
 def report_all_gpustat():
-    # 从数据库读取最新数据
-    latest_data = get_latest_from_db()
     
-    if latest_data:
-        return jsonify(latest_data)
-    else:
-        return jsonify({'error': 'No data available'}), 404
+    gpustats = []
+    now = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
+
+    mystat = get_latest_from_db()
+    if 'gpus' in mystat:
+            gpustats.append(mystat)
+    hosts = load_hosts()
+    for url in hosts:
+        try:
+            raw_resp = urlopen(url + '/gpustat')
+            gpustat = json.loads(raw_resp.read())
+            raw_resp.close()
+            if not gpustat or 'gpus' not in gpustat:
+                continue
+            if hosts[url] != url:
+                gpustat['hostname'] = hosts[url]
+            gpustats.append(gpustat)
+        except Exception as e:
+            print('Error: %s getting gpustat from %s' %
+                  (getattr(e, 'message', str(e)), url))
+
+    try:
+        sorted_gpustats = sorted(gpustats, key=lambda g: g['hostname'])
+        if sorted_gpustats is not None:
+            return jsonify({'gpustats': sorted_gpustats, 'now': now})
+
+    except Exception as e:
+        print("Error: %s" % getattr(e, 'message', str(e)))
+
+    return jsonify({'gpustats': gpustats, 'now': now})
+
 
 
 # ========== 程序入口 ==========
@@ -107,7 +141,7 @@ def main():
     init_db()
 
     # 启动后台线程
-    threading.Thread(target=background_gpustats_fetch, daemon=True).start()
+    threading.Thread(target=background_gpustat_fetch, daemon=True).start()
 
     parser = utils.arg_parser()
     args = parser.parse_args()
