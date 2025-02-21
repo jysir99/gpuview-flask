@@ -34,7 +34,7 @@ HOSTS_DB = os.path.join(ABS_PATH, 'mygpustat.db')
 
 # ========== 数据库初始化 ==========
 def init_db():
-    with sqlite3.connect(DB_FILE) as conn:
+    with sqlite3.connect(HOSTS_DB) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS gpustats (
@@ -46,14 +46,14 @@ def init_db():
 
 # ========== 保存数据到数据库 ==========
 def save_to_db(data):
-    with sqlite3.connect(DB_FILE) as conn:
+    with sqlite3.connect(HOSTS_DB) as conn:
         cursor = conn.cursor()
         cursor.execute('INSERT INTO gpustats (data) VALUES (?)', (json.dumps(data, default=str),))
         conn.commit()
 
 # ========== 从数据库读取最新数据 ==========
 def get_latest_from_db():
-    with sqlite3.connect(DB_FILE) as conn:
+    with sqlite3.connect(HOSTS_DB) as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT data FROM gpustats ORDER BY id DESC LIMIT 1')
         row = cursor.fetchone()
