@@ -29,7 +29,8 @@ except ImportError:
 app = Flask(__name__)
 
 # === 配置数据库文件路径 ===
-DB_FILE = 'mygpustat.db'
+ABS_PATH = os.path.dirname(os.path.realpath(__file__))
+HOSTS_DB = os.path.join(ABS_PATH, 'mygpustat.db')
 
 # ========== 数据库初始化 ==========
 def init_db():
