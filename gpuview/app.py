@@ -120,7 +120,6 @@ def report_all_gpustat():
             gpustat = json.loads(raw_resp.read())
             raw_resp.close()
             if 'gpus' in gpustat:
-                gpustat['hostname'] = hosts[url] if hosts[url] != url else url
                 gpustats.append(gpustat)
         except Exception as e:
             print(f'Error: {str(e)} getting gpustat from {url}')
