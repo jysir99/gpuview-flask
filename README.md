@@ -26,7 +26,7 @@ This version of [gpuview](https://github.com/fgaim/gpuview) has been refactored 
 Install directly from repo:
 
 ```
-$ pip install git+https://github.com/bei9/gpuview-flask.git
+$ pip install git+https://github.com/jysir99/gpuview-flask.git
 ```
 
 > `gpuview` installs the latest version of `gpustat` from `pypi`, therefore, its commands are available

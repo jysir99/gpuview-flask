@@ -15,8 +15,8 @@ setuptools.setup(
     description='A lightweight web dashboard for monitoring GPU usage',
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url='https://github.com/bei9/gpuview-flask',
-    author='Bei9',
+    url='https://github.com/jysir99/gpuview-flask',
+    author='jysir99',
     author_email='laujoyce@vip.qq.com',
     keywords='gpu web-monitoring',
     classifiers=[
