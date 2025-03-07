@@ -2,6 +2,7 @@ __pycache__
 .vscode/
 .pytest_cache/
 .eggs/
+test/*
 dist/
 build/
 tmp/
