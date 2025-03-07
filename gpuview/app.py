@@ -155,8 +155,7 @@ def report_all_gpustat():
     gpustats.append(mystat)
     allstat = get_all_latest_from_db()
     if len(allstat) > 0:
-        gpustats.append(allstat)
-
+        gpustats = [mystat] + allstat
     return jsonify({'gpustats': sorted(gpustats, key=lambda g: g['hostname']), 'now': now})
 
 
