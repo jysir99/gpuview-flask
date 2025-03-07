@@ -50,9 +50,21 @@ def init_db():
                 data TEXT
             ) ENGINE=InnoDB;
         ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS allgpustats (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                data TEXT
+            ) ENGINE=InnoDB;
+        ''')
     else:
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS gpustats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                data TEXT
+            )
+        ''')
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS allgpustats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 data TEXT
             )
@@ -62,13 +74,13 @@ def init_db():
 
 
 # ========== 保存数据到数据库 ==========
-def save_to_db(data):
+def save_to_db(data, dbname):
     conn = get_db_connection()
     cursor = conn.cursor()
     if DB_TYPE == 'mysql':
-        cursor.execute('INSERT INTO gpustats (data) VALUES (%s)', (json.dumps(data, default=str),))
+        cursor.execute(f'INSERT INTO {dbname} (data) VALUES (%s)', (json.dumps(data, default=str),))
     else:
-        cursor.execute('INSERT INTO gpustats (data) VALUES (?)', (json.dumps(data, default=str),))
+        cursor.execute(f'INSERT INTO {dbname} (data) VALUES (?)', (json.dumps(data, default=str),))
     conn.commit()
     conn.close()
 
@@ -78,6 +90,16 @@ def get_latest_from_db():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute('SELECT data FROM gpustats ORDER BY id DESC LIMIT 1')
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return json.loads(row[0])
+    return None
+
+def get_all_latest_from_db():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT data FROM allgpustats ORDER BY id DESC LIMIT 1')
     row = cursor.fetchone()
     conn.close()
     if row:
@@ -101,7 +123,26 @@ def report_gpustat():
 def background_gpustat_fetch():
     while True:
         gpustat = core.my_gpustat()
-        save_to_db(gpustat)
+        save_to_db(gpustat, 'gpustats')
+        print(f"Data fetched at {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}")
+        time.sleep(2)  # 每 2 秒执行一次
+
+def background_allgpustat_fetch():
+    while True:
+        hosts = core.load_hosts()
+        gpustats = []
+        for url in hosts:
+            try:
+                raw_resp = urlopen(url + '/gpustat')
+                gpustat = json.loads(raw_resp.read())
+                raw_resp.close()
+                if 'gpus' in gpustat:
+                    gpustats.append(gpustat)
+            except Exception as e:
+                print(f'Error: {str(e)} getting gpustat from {url}')
+                continue
+
+        save_to_db(gpustats, 'allgpustats')
         print(f"Data fetched at {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}")
         time.sleep(2)  # 每 2 秒执行一次
 
@@ -111,18 +152,11 @@ def report_all_gpustat():
     gpustats = []
     now = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
     mystat = get_latest_from_db()
-    if mystat and 'gpus' in mystat:
-        gpustats.append(mystat)
-    hosts = core.load_hosts()
-    for url in hosts:
-        try:
-            raw_resp = urlopen(url + '/gpustat')
-            gpustat = json.loads(raw_resp.read())
-            raw_resp.close()
-            if 'gpus' in gpustat:
-                gpustats.append(gpustat)
-        except Exception as e:
-            print(f'Error: {str(e)} getting gpustat from {url}')
+    gpustats.append(mystat)
+    allstat = get_all_latest_from_db()
+    if len(allstat) > 0:
+        gpustats.append(allstat)
+
     return jsonify({'gpustats': sorted(gpustats, key=lambda g: g['hostname']), 'now': now})
 
 
@@ -146,6 +180,7 @@ def main():
     
     init_db()
     threading.Thread(target=background_gpustat_fetch, daemon=True).start()
+    threading.Thread(target=background_allgpustat_fetch, daemon=True).start()
 
     if args.action == 'run':
         core.safe_zone(args.safe_zone)
