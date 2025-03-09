@@ -1,6 +1,5 @@
 ![Screenshot of gpuview](imgs/image.png)
 
-
 ## gpuview-flask: 
 ---------------------
 
@@ -18,6 +17,9 @@ This version of [gpuview](https://github.com/fgaim/gpuview) has been refactored 
 - **Auto-Refresh** – Continuously updates GPU stats without manual refresh.
 - **Lightweight & Scalable** – Built with Flask and Vue.js for efficiency and responsiveness.
 - **Support for MySQL and SQLite** – Now supports both MySQL and SQLite as database backends.
+- **ECharts-Based Visualization** – Provides two key real-time charts:
+  - **GPU Memory Usage Ranking** – Displays per-user GPU memory consumption in a **bar chart**.
+  - **GPU Memory Utilization** – Shows the overall **GPU memory distribution** across devices in a **pie chart**.
 
 
 ## Setup
@@ -88,7 +90,6 @@ There are a few important options in `gpuview`, use `-h` to see them all.
 ```
 $ gpuview -h
 ```
-
 * `run`                : Start `gpuview` dashboard server
   * `--host`           : URL or IP address of host (default: 0.0.0.0)
   * `--port`           : Port number to listen to (default: 9988)
@@ -110,6 +111,7 @@ $ gpuview -h
   * `--exclude-self`   : Don't report to others but to self-dashboard
 * `-v`, `--version`    : Print versions of `gpuview` and `gpustat`
 * `-h`, `--help`       : Print help for command-line options
+
 
 
 ### Monitoring multiple hosts

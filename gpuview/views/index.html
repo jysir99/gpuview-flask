@@ -24,7 +24,8 @@
         type="application/javascript"></script>
     <script src="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/axios/0.26.0/axios.min.js"
         type="application/javascript"></script>
-
+    <script src="https://lf26-cdn-tos.bytecdntp.com/cdn/expire-1-M/echarts/5.3.0-rc.1/echarts.min.js"
+        type="application/javascript"></script>
     <link href="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/bootstrap/4.5.3/css/bootstrap.min.css" type="text/css"
         rel="stylesheet" />
     <link href="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/font-awesome/4.7.0/css/font-awesome.min.css"
@@ -142,8 +143,8 @@
                                         <th scope="col">
                                             <div style="justify-content: space-between; display: flex;">
                                                 <div>Memory Use/Cap</div>
-                                                <div>Available</div>     
-                                            </div>   
+                                                <div>Available</div>
+                                            </div>
                                         </th>
                                         <th scope="col">Power Use/Cap</th>
                                         <th scope="col">User Processes</th>
@@ -175,9 +176,11 @@
                                                 <div class="progress-bar-container">
                                                     <div class="progress-bar-text">
                                                         <div style="justify-content: space-between; display: flex;">
-                                                            <div>{{ gpu.memory !== undefined ? gpu.memory : '-' }}% ({{ gpu['memory.used'] || 0 }}/{{ gpu['memory.total'] || '-' }}) </div>
-                                                            <div>{{gpu['memory.total'] - gpu['memory.used']}}</div>     
-                                                        </div> 
+                                                            <div>{{ gpu.memory !== undefined ? gpu.memory : '-' }}% ({{
+                                                                gpu['memory.used'] || 0 }}/{{ gpu['memory.total'] || '-'
+                                                                }}) </div>
+                                                            <div>{{gpu['memory.total'] - gpu['memory.used']}}</div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </td>
@@ -191,9 +194,27 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                    <div class="card-body">
-                        Here will be a chart. 
+
+                        <div class="row">
+                            <!-- 显存使用排行 -->
+                            <div class="col-12 col-md-6">
+                                <div class="card">
+                                    <div class="card-header">显存使用排行</div>
+                                    <div class="card-body">
+                                        <div id="userMemoryChart" style="width: 100%; height: 400px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 显卡显存占比 -->
+                            <div class="col-12 col-md-6">
+                                <div class="card">
+                                    <div class="card-header">显卡显存占比</div>
+                                    <div class="card-body">
+                                        <div id="gpuMemoryChart" style="width: 100%; height: 400px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="card-footer small text-muted">{{ update_time }}</div>
@@ -215,9 +236,6 @@
     <script>
         $('[data-toggle="tooltip"]').tooltip()
 
-        // $(function () {
-        //     $('[data-toggle="tooltip"]').tooltip()
-        // })
         new Vue({
             el: '#app',
             data: {
@@ -275,19 +293,32 @@
                         ]
                     }
                 ],
-                update_time: '2024-07-04 12:00:00'
+                update_time: '2024-07-04 12:00:00',
+
+                userMemoryData: [], // 用户显存使用数据
+                gpuMemoryData: [] // 显卡显存占比数据
+            },
+            mounted() {
+                this.initCharts();
+                this.fetchData();
+                window.addEventListener("resize", this.resizeCharts);
             },
             created() {
-                this.fetchData()
                 this.startAutoRefresh()
             },
+
             methods: {
                 fetchData() {
                     axios.get('/all_gpustat')
                         .then(response => {
                             this.gpustats = response.data.gpustats;
                             this.update_time = response.data.now;
-                            // this.startAutoRefresh();
+
+                            this.processUserMemoryData();
+                            this.processGpuMemoryData();
+
+                            this.updateCharts();
+
                         })
                         .catch(error => {
                             console.error("There was an error fetching the GPU stats:", error);
@@ -328,9 +359,138 @@
                     const memoryUsed = gpu["memory.used"];
                     const memoryDifference = Math.abs(memoryUsed - totalProcessMemory);
                     return memoryDifference > 400;
+                },
+
+                processUserMemoryData() {
+                    // console.log(this.gpustats)
+                    let userMemoryMap = {};
+
+                    for (let i = 0; i < this.gpustats.length; i++) {
+                        let host = this.gpustats[i];
+
+                        for (let j = 0; j < host.gpus.length; j++) {
+                            let gpu = host.gpus[j];
+
+                            for (let k = 0; k < gpu.processes.length; k++) {
+                                let process = gpu.processes[k];
+                                let user = process.username || "Unknown";
+                                let memoryUsed = parseFloat((process.gpu_memory_usage / 1000).toFixed(2));
+                                if (!userMemoryMap[user]) {
+                                    userMemoryMap[user] = 0.0;
+                                }
+                                userMemoryMap[user] += memoryUsed;
+
+                            }
+
+                        }
+                    }
+
+                    // 转换为数组并排序
+                    let userMemoryArray = [];
+                    for (let user in userMemoryMap) {
+                        userMemoryArray.push({ user, memory: userMemoryMap[user] });
+                    }
+
+                    this.userMemoryData = userMemoryArray;
+                },
+
+
+                processGpuMemoryData() {
+                    let gpuMemoryData = []
+                    for (const host of this.gpustats) {
+                        for (const gpu of host.gpus) {
+                            const memoryUsedGB = (gpu["memory.used"] || 0);
+                            if (memoryUsedGB > 10) {
+                                gpuMemoryData.push({
+                                    name: `${host.hostname} [${gpu.index}]`,
+                                    value: parseFloat((memoryUsedGB / 1000).toFixed(2))
+                                });
+                            }
+                        }
+                    }
+
+                    this.gpuMemoryData = gpuMemoryData;
+                },
+
+                initCharts() {
+                    this.userMemoryChart = echarts.init(document.getElementById("userMemoryChart"));
+                    this.gpuMemoryChart = echarts.init(document.getElementById("gpuMemoryChart"));
+
+                    this.updateCharts();
+                },
+
+                updateCharts() {
+                    // 更新用户显存排行（柱状图）
+                    this.userMemoryChart.setOption({
+                        tooltip: {
+                            trigger: "item",
+                            formatter: "{b}<br>{c} GB"
+                        },
+                        xAxis: {
+                            type: "value",
+                            max: "dataMax"
+                        },
+                        yAxis: {
+                            type: "category",
+                            data: this.userMemoryData.map(d => d.user),
+                            inverse: true,
+                            animationDuration: 300,
+                            animationDurationUpdate: 300,
+                        },
+                        series: [
+                            {
+                                realtimeSort: true,
+                                name: "显存使用",
+                                type: "bar",
+                                data: this.userMemoryData.map(d => d.memory),
+                                label: {
+                                    show: true,
+                                    position: "right",
+                                    valueAnimation: true,
+                                    formatter: "{c} GB"
+                                }
+                            }
+                        ],
+                        animationDuration: 0,
+                        animationDurationUpdate: 2000,
+                        animationEasing: 'linear',
+                        animationEasingUpdate: 'linear'
+                    });
+
+                    // 更新显卡显存占比（饼图）
+                    this.gpuMemoryChart.setOption({
+                        tooltip: {
+                            trigger: "item",
+                            formatter: "{b}<br>{c} GB ({d}%)"
+                        },
+                        legend: {
+                            orient: "vertical",
+                            left: "right",
+                            data: this.gpuMemoryData.map(item => item.name)
+                        },
+                        series: [
+                            {
+                                name: "显存占比",
+                                type: "pie",
+                                radius: ["40%", "70%"],
+                                label: {
+                                    formatter: "{b}\n{c} GB ({d}%)"
+                                },
+                                data: this.gpuMemoryData
+                            }
+                        ]
+                    });
+
+
+                },
+
+                resizeCharts() {
+                    this.userMemoryChart.resize();
+                    this.gpuMemoryChart.resize();
                 }
             }
         });
+
     </script>
 
 </body>
