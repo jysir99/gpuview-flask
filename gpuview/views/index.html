@@ -236,7 +236,7 @@
     <script>
         $('[data-toggle="tooltip"]').tooltip()
 
-        new Vue({
+        var vm = new Vue({
             el: '#app',
             data: {
                 refreshInterval: 2, // 默认刷新间隔为10秒
@@ -374,9 +374,9 @@
                             for (let k = 0; k < gpu.processes.length; k++) {
                                 let process = gpu.processes[k];
                                 let user = process.username || "Unknown";
-                                let memoryUsed = parseFloat((process.gpu_memory_usage / 1000).toFixed(2));
+                                let memoryUsed = process.gpu_memory_usage;
                                 if (!userMemoryMap[user]) {
-                                    userMemoryMap[user] = 0.0;
+                                    userMemoryMap[user] = 0;
                                 }
                                 userMemoryMap[user] += memoryUsed;
 
@@ -388,7 +388,7 @@
                     // 转换为数组并排序
                     let userMemoryArray = [];
                     for (let user in userMemoryMap) {
-                        userMemoryArray.push({ user, memory: userMemoryMap[user] });
+                        userMemoryArray.push({ user, memory: parseFloat((userMemoryMap[user] / 1000).toFixed(2)) });
                     }
 
                     this.userMemoryData = userMemoryArray;
