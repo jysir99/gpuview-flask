@@ -1,3 +1,4 @@
 gpustat>=0.5.0
 flask
 flask_caching
+mysql-connector-python
