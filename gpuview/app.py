@@ -126,9 +126,12 @@ def report_gpustat():
 # ========== 后台线程定期获取 GPU 状态 ==========
 def background_gpustat_fetch():
     while True:
-        gpustat = core.my_gpustat()
+        gpustat = core.my_gpustat()            
         save_to_db(gpustat, 'gpustats')
         print(f"Data fetched at {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}")
+        if gpustat['error']:
+            print(f"GPUSTAT ERROR DETECTED: {gpustat['error']}, shutting down Flask server...")
+            os._exit(1)  # 强制退出整个 Python 进程
         time.sleep(2)  # 每 2 秒执行一次
 
 def background_allgpustat_fetch():
