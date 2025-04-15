@@ -14,7 +14,7 @@ import threading
 import time
 import mysql.connector
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, send_file, request
 from urllib.parse import urlparse
 from . import utils
 from . import core
@@ -123,13 +123,73 @@ def report_gpustat():
     return jsonify(latest_data if latest_data else {})
 
 
+
+@app.route('/find_process', methods=['GET'])
+def find_process():
+    hostname = request.args.get('hostname')
+    gpuid = int(request.args.get('gpuid'))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM gpustats ORDER BY id DESC')
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    last_sum = None
+    last_processes = []
+
+    for row in rows:
+        raw_data = row[1]
+        try:
+            data = json.loads(raw_data)
+        except:
+            continue
+
+        for hostinfo in data:
+            hostinfo = data
+            if hostinfo.get('hostname') != hostname:
+                continue
+
+            gpus = hostinfo.get('gpus', [])
+            if gpuid >= len(gpus):
+                continue
+
+            gpu = gpus[gpuid]
+            memory_used = gpu.get('memory.used', 0)
+            processes = gpu.get('processes', [])
+
+            process_sum = sum(p.get('gpu_memory_usage', 0) for p in processes)
+
+            if last_sum is not None:
+                diff1 = abs(last_sum - last_process_sum)
+                diff2 = abs(memory_used - process_sum)
+                # 判断有明显变化的两次记录
+                if diff1 > 400 and diff2 < 400:
+                    print(f"Diff: {diff1} vs {diff2}")
+
+                    result = []
+                    for p in last_processes:
+                        result.append({
+                            'user': p.get('username', '-'),
+                            'process': p.get('command', '-')
+                        })
+                    return jsonify({'code': 0, 'data': {'processes': result}, 'row': row[0]})
+
+            # 保存当前数据供下次对比
+            last_sum = memory_used
+            last_process_sum = process_sum
+            last_processes = processes
+
+    return jsonify({'code': 1, 'msg': '未找到卡内存的进程'})
+
 # ========== 后台线程定期获取 GPU 状态 ==========
 def background_gpustat_fetch():
     while True:
         gpustat = core.my_gpustat()            
         save_to_db(gpustat, 'gpustats')
         print(f"Data fetched at {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}")
-        if gpustat['error']:
+        if 'error' in gpustat:
             print(f"GPUSTAT ERROR DETECTED: {gpustat['error']}, shutting down Flask server...")
             os._exit(1)  # 强制退出整个 Python 进程
         time.sleep(2)  # 每 2 秒执行一次
@@ -138,17 +198,23 @@ def background_allgpustat_fetch():
     while True:
         hosts = core.load_hosts()
         gpustats = []
+        mystat = get_latest_from_db()
+        gpustats.append(mystat)
+        allstat = []
         for url in hosts:
             try:
                 raw_resp = urlopen(url + '/gpustat')
                 gpustat = json.loads(raw_resp.read())
                 raw_resp.close()
                 if 'gpus' in gpustat:
-                    gpustats.append(gpustat)
+                    allstat.append(gpustat)
             except Exception as e:
                 print(f'Error: {str(e)} getting gpustat from {url}')
                 continue
-
+        
+        if len(allstat) > 0:
+            gpustats = [mystat] + allstat
+            
         save_to_db(gpustats, 'allgpustats')
         print(f"Data fetched at {datetime.now().strftime('%Y-%m-%d %H-%M-%S')}")
         time.sleep(2)  # 每 2 秒执行一次
@@ -174,13 +240,9 @@ def cleanup_old_data():
 
 @app.route('/all_gpustat', methods=['GET'])
 def report_all_gpustat():
-    gpustats = []
     now = datetime.now().strftime('%Y-%m-%d %H-%M-%S')
-    mystat = get_latest_from_db()
-    gpustats.append(mystat)
-    allstat = get_all_latest_from_db()
-    if len(allstat) > 0:
-        gpustats = [mystat] + allstat
+    gpustats = get_all_latest_from_db()
+
     return jsonify({'gpustats': sorted(gpustats, key=lambda g: g['hostname']), 'now': now})
 
 

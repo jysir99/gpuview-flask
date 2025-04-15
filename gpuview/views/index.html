@@ -26,12 +26,30 @@
         type="application/javascript"></script>
     <script src="https://lf26-cdn-tos.bytecdntp.com/cdn/expire-1-M/echarts/5.3.0-rc.1/echarts.min.js"
         type="application/javascript"></script>
+
     <link href="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/bootstrap/4.5.3/css/bootstrap.min.css" type="text/css"
         rel="stylesheet" />
     <link href="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/font-awesome/4.7.0/css/font-awesome.min.css"
         type="text/css" rel="stylesheet" />
     <link href="https://lf26-cdn-tos.bytecdntp.com/cdn/expire-1-M/datatables/1.10.18/css/dataTables.bootstrap4.min.css"
         type="text/css" rel="stylesheet" />
+
+    <!-- Prism 核心 -->
+    <script src="https://lf9-cdn-tos.bytecdntp.com/cdn/expire-1-M/prism/1.27.0/prism.min.js"></script>
+    <link rel="stylesheet"
+        href="https://lf26-cdn-tos.bytecdntp.com/cdn/expire-1-M/prism/1.27.0/themes/prism-coy.min.css">
+    <!-- Prism Bash 语言支持 -->
+    <script src="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/prism/1.27.0/components/prism-bash.min.js"></script>
+
+    <!-- Prism Toolbar 插件（必须先加载） -->
+    <link rel="stylesheet"
+        href="https://lf6-cdn-tos.bytecdntp.com/cdn/expire-1-M/prism/1.27.0/plugins/toolbar/prism-toolbar.min.css">
+    <script
+        src="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/prism/1.27.0/plugins/toolbar/prism-toolbar.min.js"></script>
+
+    <!-- Prism Copy 插件（必须后加载） -->
+    <script
+        src="https://lf3-cdn-tos.bytecdntp.com/cdn/expire-1-M/prism/1.27.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
 
     <style>
         .progress-bar-container {
@@ -53,6 +71,11 @@
             padding-left: 5px;
             color: black;
             white-space: nowrap;
+        }
+
+        pre[class*="language-"]::before,
+        pre[class*="language-"]::after {
+            box-shadow: none !important;
         }
     </style>
 </head>
@@ -151,7 +174,7 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <template v-for="gpustat in gpustats">
+                                    <template v-for="(gpustat, statIndex) in gpustats">
                                         <tr v-for="(gpu, gpuIndex) in gpustat.gpus"
                                             :key="gpustat.hostname + '-' + (gpu.index !== undefined ? gpu.index : gpuIndex)">
                                             <td v-if="gpuIndex === 0" :rowspan="gpustat.gpus.length">{{ gpustat.hostname
@@ -161,10 +184,11 @@
                                             <td>
                                                 [{{ gpu.index !== undefined ? gpu.index : '' }}] {{ gpu.name || '-' }}
                                                 <span v-if="isMemoryExceeded(gpu)" class="badge badge-danger"
-                                                    data-toggle="tooltip" data-placement="right" title="可能卡内存"><i
-                                                        class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-
+                                                    @click="findProcess(gpustat.hostname, gpuIndex)"
+                                                    style="cursor:pointer;">
+                                                    <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
                                                 </span>
+
                                             </td>
                                             <td>{{ gpu['temperature.gpu'] !== undefined ? gpu['temperature.gpu'] : '-'
                                                 }}&#8451;</td>
@@ -225,13 +249,66 @@
                             <small>Thx &nbsp<a target="_blank" href="https://github.com/fgaim/gpuview">gpuview</a> ©
                                 2018</small><br>
                             <small>Vue & Flask version By Jysir &nbsp<a target="_blank"
-                                    href="https://github.com/jysir99/gpuview-flask">gpuview-flask</a> © 2024</small>
+                                    href="https://github.com/jysir99/gpuview-flask">gpuview-flask</a> © 2025</small>
                         </div>
                     </div>
                 </footer>
             </div>
         </div>
+
+
+        <div class="modal fade" id="memoryModal" tabindex="-1" role="dialog" aria-labelledby="memoryModalLabel"
+            aria-hidden="true" data-backdrop="static" data-keyboard="false">
+            <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="memoryModalLabel">可能卡内存的用户</h5>
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                            <span aria-hidden="true">&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div v-if="modalLoading" class="text-center" style="padding:20px;">
+                            <i class="fa fa-spinner fa-spin fa-2x"></i>
+                            <div style="margin-top:10px;">正在加载进程信息...</div>
+                        </div>
+
+                        <div v-else>
+                            <div v-if="modalData.length">
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th style="width:100px;">用户</th>
+                                            <th style="width:300px;">进程</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="item in modalData" :key="item.pid">
+                                            <td>{{ item.user }}</td>
+                                            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                                {{ item.process }}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div>
+                                    <span style="font-weight: bold;">卡内存清理指令</span>
+
+                                    <pre><code class="language-bash">ps x | grep python | awk '{print $1}' | xargs kill</code></pre>
+                                    解释：ps grep组合查看python进程，使用awk分割pid，xargs组合kill命令，等价于kill [属于python的pid]<br>
+                                    <span style="color: red;">该操作可能会删除所有进程，请确保没有正在运行的进程</span>
+                                </div>
+                            </div>
+
+                            <div v-else>暂无进程信息</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
+
 
     <script>
         $('[data-toggle="tooltip"]').tooltip()
@@ -241,7 +318,8 @@
             data: {
                 refreshInterval: 2, // 默认刷新间隔为10秒
                 autoRefreshTimer: null, // 自动刷新定时器
-
+                modalData: [],    // 表格数据
+                modalLoading: false,  // 控制 loading 状态
                 gpustats: [
                     {
                         hostname: 'host1',
@@ -487,6 +565,32 @@
                 resizeCharts() {
                     this.userMemoryChart.resize();
                     this.gpuMemoryChart.resize();
+                },
+
+                findProcess(hostname, gpuid) {
+                    console.log('findProcess', hostname, gpuid)
+                    this.modalLoading = true
+                    $('#memoryModal').modal('show')
+                    axios.get('/find_process', {
+                        params: { hostname, gpuid }
+                    })
+                        .then(res => {
+                            if (res.data.code === 0) {
+                                this.modalData = res.data.data.processes || []
+                            } else {
+                                this.$message.error('获取进程信息失败')
+                            }
+                        })
+                        .catch(() => {
+                            this.modalData = [{ user: 'xxx', process: 'xxx', pid: 123 }]
+                            console.log(' 获取进程信息失败')
+                        }).finally(() => {
+                            this.modalLoading = false
+
+                            this.$nextTick(() => {
+                                Prism.highlightAll(); // 重新触发高亮
+                            });
+                        })
                 }
             }
         });
