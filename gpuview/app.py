@@ -36,7 +36,9 @@ DB_URL = ''  # MySQL连接URL
 def get_db_connection():
     if DB_TYPE == 'mysql':
         return mysql.connector.connect(**DB_URL)
-    return sqlite3.connect(HOSTS_DB)
+    conn = sqlite3.connect(HOSTS_DB)
+    conn.execute('PRAGMA journal_mode=WAL;')  # 启用 WAL 模式
+    return conn
 
 
 # ========== 数据库初始化 ==========
