@@ -28,7 +28,7 @@ setuptools.setup(
         'Topic :: System :: Monitoring',
     ],
     packages=['gpuview'],
-    install_requires=['gpustat>=0.5.0', 'flask', 'flask_caching'],
+    install_requires=['gpustat>=0.5.0', 'flask', 'flask_caching', 'mysql-connector-python'],
     extras_require={'test': ['pytest']},
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
