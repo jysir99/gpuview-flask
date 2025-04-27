@@ -133,13 +133,14 @@ def find_process():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM gpustats ORDER BY id DESC')
+    cursor.execute('SELECT * FROM allgpustats ORDER BY id DESC')
 
     rows = cursor.fetchall()
     conn.close()
 
-    last_sum = None
-    last_processes = []
+    prev_sum = None
+    prev_process_sum = None
+    prev_processes = []
 
     for row in rows:
         raw_data = row[1]
@@ -147,9 +148,7 @@ def find_process():
             data = json.loads(raw_data)
         except:
             continue
-
         for hostinfo in data:
-            hostinfo = data
             if hostinfo.get('hostname') != hostname:
                 continue
 
@@ -160,29 +159,44 @@ def find_process():
             gpu = gpus[gpuid]
             memory_used = gpu.get('memory.used', 0)
             processes = gpu.get('processes', [])
-
             process_sum = sum(p.get('gpu_memory_usage', 0) for p in processes)
+            row_id = row[0]
 
-            if last_sum is not None:
-                diff1 = abs(last_sum - last_process_sum)
-                diff2 = abs(memory_used - process_sum)
-                # 判断有明显变化的两次记录
-                if diff1 > 400 and diff2 < 400:
-                    print(f"Diff: {diff1} vs {diff2}")
+            if prev_sum is not None and prev_process_sum is not None:
+                diff1 = abs(memory_used - process_sum)
+                diff2 = abs(prev_sum - prev_process_sum)
 
+                if diff2 > 400 and diff1 < 400:
+                    print(f"Diff: {diff2} vs {diff1}")
+
+                    current_usernames = {p.get('username') for p in processes}
+                    prev_usernames = {p.get('username') for p in prev_processes}
+                    released_users = current_usernames - prev_usernames
+                    
                     result = []
-                    for p in last_processes:
-                        result.append({
-                            'user': p.get('username', '-'),
-                            'process': p.get('command', '-')
-                        })
-                    return jsonify({'code': 0, 'data': {'processes': result}, 'row': row[0]})
+                    for p in processes:
+                        if p.get('username') in released_users:
+                            result.append({
+                                'user': p.get('username', '-'),
+                                'process': p.get('command', '-'),
+                                'gpu_memory_usage': p.get('gpu_memory_usage', 0)
+                            })
+
+                    return jsonify({
+                        'code': 0,
+                        'data': {
+                            'processes': result
+                        },
+                        'row': row[0],
+                        'last_row': prev_row_id
+                    })
 
             # 保存当前数据供下次对比
-            last_sum = memory_used
-            last_process_sum = process_sum
-            last_processes = processes
-
+            prev_sum = memory_used
+            prev_process_sum = process_sum
+            prev_processes = processes
+            prev_row_id = row_id
+            
     return jsonify({'code': 1, 'msg': '未找到卡内存的进程'})
 
 # ========== 后台线程定期获取 GPU 状态 ==========
